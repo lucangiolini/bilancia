@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bilancia</title>
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Bilancia">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<script src="xlsx.min.js" defer></script>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --bg:#F2F2F7; --ink:#1C1C1E; --muted:#6C6C70; --hair:rgba(60,60,67,.18);
+  --glass:rgba(255,255,255,.62); --glass-strong:rgba(255,255,255,.82); --glass-edge:rgba(255,255,255,.7);
+  --fill:rgba(118,118,128,.12); --fill-2:rgba(118,118,128,.2);
+  --tint:#007AFF; --warn:#B25000; --warn-bg:rgba(255,149,0,.16); --danger:#D70015;
+  --blob1:rgba(0,122,255,.28); --blob2:rgba(255,149,0,.24); --blob3:rgba(52,199,89,.2);
+  --shadow:0 10px 30px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05); --thumb:#FFFFFF;
+  --c1:#007AFF; --c2:#FF9500; --c3:#34C759; --c4:#AF52DE; --c5:#FF2D55; --c6:#5AC8FA;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#000000; --ink:#F5F5F7; --muted:#A1A1A6; --hair:rgba(84,84,88,.6);
+    --glass:rgba(44,44,46,.55); --glass-strong:rgba(44,44,46,.85); --glass-edge:rgba(255,255,255,.1);
+    --fill:rgba(118,118,128,.24); --fill-2:rgba(118,118,128,.36);
+    --tint:#0A84FF; --warn:#FFB340; --warn-bg:rgba(255,159,10,.18); --danger:#FF453A;
+    --blob1:rgba(10,132,255,.32); --blob2:rgba(255,159,10,.22); --blob3:rgba(48,209,88,.16);
+    --shadow:0 10px 30px rgba(0,0,0,.4); --thumb:#636366;
+    --c1:#0A84FF; --c2:#FF9F0A; --c3:#30D158; --c4:#BF5AF2; --c5:#FF375F; --c6:#64D2FF;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#000000; --ink:#F5F5F7; --muted:#A1A1A6; --hair:rgba(84,84,88,.6);
+  --glass:rgba(44,44,46,.55); --glass-strong:rgba(44,44,46,.85); --glass-edge:rgba(255,255,255,.1);
+  --fill:rgba(118,118,128,.24); --fill-2:rgba(118,118,128,.36);
+  --tint:#0A84FF; --warn:#FFB340; --warn-bg:rgba(255,159,10,.18); --danger:#FF453A;
+  --blob1:rgba(10,132,255,.32); --blob2:rgba(255,159,10,.22); --blob3:rgba(48,209,88,.16);
+  --shadow:0 10px 30px rgba(0,0,0,.4); --thumb:#636366;
+  --c1:#0A84FF; --c2:#FF9F0A; --c3:#30D158; --c4:#BF5AF2; --c5:#FF375F; --c6:#64D2FF;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  font-size:17px;line-height:1.35;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+.rounded{font-family:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+.num{font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+input{-webkit-appearance:none;appearance:none}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--tint) 55%,transparent);outline-offset:2px}
+
+/* Sfondo con macchie di colore: dà profondità al vetro */
+.backdrop{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.blob{position:absolute;border-radius:50%;filter:blur(60px)}
+.b1{width:380px;height:380px;background:var(--blob1);top:-120px;left:-120px}
+.b2{width:340px;height:340px;background:var(--blob2);top:180px;right:-160px}
+.b3{width:300px;height:300px;background:var(--blob3);bottom:-80px;left:10%}
+@media (prefers-reduced-motion:no-preference){
+  .b1{animation:drift1 22s ease-in-out infinite alternate}
+  .b2{animation:drift2 26s ease-in-out infinite alternate}
+  .b3{animation:drift1 30s ease-in-out infinite alternate-reverse}
+}
+@keyframes drift1{to{transform:translate(60px,80px) scale(1.1)}}
+@keyframes drift2{to{transform:translate(-70px,60px) scale(.92)}}
+
+.wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:12px 16px 40px}
+header{display:flex;align-items:flex-end;justify-content:space-between;margin:8px 4px 14px}
+h1{margin:0;font-size:34px;font-weight:700;letter-spacing:.01em}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(28px) saturate(180%);backdrop-filter:blur(28px) saturate(180%);
+  border:.5px solid var(--glass-edge);box-shadow:var(--shadow)}
+.card{border-radius:24px;padding:18px;margin-bottom:14px}
+.icon-btn{width:44px;height:44px;border-radius:50%;border:0;display:grid;place-items:center;color:var(--ink)}
+.icon-btn svg{width:22px;height:22px}
+
+/* Display */
+.recrow{display:flex;gap:8px;align-items:center}
+.pill{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:var(--fill);border-radius:14px;padding:10px 12px;min-height:48px;text-align:left}
+.pill .t{flex:1;min-width:0}
+.pill .t b{display:block;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill .t span{font-size:13px;color:var(--muted)}
+.pill svg{width:16px;height:16px;color:var(--muted);flex-shrink:0}
+.quick{border:0;background:var(--fill);border-radius:14px;min-height:48px;padding:0 14px;font-size:15px;font-weight:600;color:var(--tint);white-space:nowrap}
+.readout{margin:18px 0 6px;display:flex;align-items:baseline;justify-content:center;gap:6px}
+.readout .val{font-size:84px;font-weight:700;letter-spacing:-.035em;line-height:1}
+.readout .u{font-size:28px;font-weight:600;color:var(--muted)}
+.sub{text-align:center;font-size:14px;color:var(--muted);min-height:20px}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--fill);margin:16px 0 18px}
+.bar i{display:block;height:100%;width:0;transition:width .55s cubic-bezier(.2,.8,.2,1)}
+.field label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px 4px}
+.inp{width:100%;border:0;background:var(--fill);border-radius:14px;padding:12px 14px;min-height:50px;font-size:17px}
+.inp.big{font-size:26px;font-weight:700;text-align:center}
+.inp::placeholder{color:var(--muted);font-weight:400}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mt{margin-top:12px}
+.hidden{display:none!important}
+
+/* Segmented control */
+.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--fill);border-radius:12px;padding:3px;margin-bottom:14px}
+.seg .thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:9px;background:var(--thumb);box-shadow:0 3px 8px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04);transition:transform .35s cubic-bezier(.32,.72,0,1)}
+.seg[data-v="crudo"] .thumb{transform:translateX(100%)}
+.seg button{position:relative;z-index:1;border:0;background:none;min-height:38px;font-size:15px;font-weight:600}
+
+/* Commensali */
+.row-between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.stepper{display:flex;align-items:center;background:var(--fill);border-radius:12px;overflow:hidden}
+.stepper button{border:0;background:none;width:46px;height:40px;font-size:22px;font-weight:500}
+.stepper button:disabled{opacity:.3}
+.stepper span{min-width:30px;text-align:center;font-weight:700}
+.stepper i{width:.5px;height:20px;background:var(--hair)}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:14px -18px 4px;padding:2px 18px 6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;border:0;background:var(--fill);border-radius:18px;padding:0 14px;min-height:36px;font-size:15px;font-weight:600;white-space:nowrap}
+.chip.on{background:var(--tint);color:#fff}
+.hint{font-size:13px;color:var(--muted);margin:10px 4px 0}
+.people{margin-top:8px}
+.person{display:grid;grid-template-columns:auto minmax(0,1fr) 92px;gap:12px;align-items:center;padding:10px 0;border-top:.5px solid var(--hair)}
+.person:first-child{border-top:0}
+@media (prefers-reduced-motion:no-preference){.person.new{animation:pop .4s cubic-bezier(.2,.9,.3,1.2)}}
+@keyframes pop{from{opacity:0;transform:scale(.94) translateY(-6px)}}
+.badge{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+.person .inp{min-height:44px;padding:8px 34px 8px 12px;font-weight:600}
+.unitwrap{position:relative}
+.unitwrap em{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--muted);font-size:15px;pointer-events:none}
+.out{text-align:right}
+.out b{display:block;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.out .o2{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.rem{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding:12px 14px;border-radius:14px;background:var(--fill)}
+.rem b{font-size:22px;font-weight:700}
+.rem small{color:var(--muted);font-size:13px}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:14px;padding:11px 14px;margin-top:10px;font-size:15px;font-weight:500}
+
+/* Fogli a scorrimento dal basso */
+.scrim{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .3s}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;max-width:560px;margin:0 auto;max-height:88vh;display:flex;flex-direction:column;
+  border-radius:22px 22px 0 0;padding:8px 16px calc(16px + env(safe-area-inset-bottom,0px));
+  background:var(--glass-strong);-webkit-backdrop-filter:blur(40px) saturate(180%);backdrop-filter:blur(40px) saturate(180%);
+  border-top:.5px solid var(--glass-edge);transform:translateY(105%);transition:transform .45s cubic-bezier(.32,.72,0,1);visibility:hidden}
+.sheet.on{transform:none;visibility:visible}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--fill-2);margin:2px auto 10px}
+.sheet h2{margin:0;font-size:20px;font-weight:700}
+.sheet .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.txt-btn{border:0;background:none;color:var(--tint);font-size:17px;font-weight:600;min-height:44px;padding:0 4px}
+.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -16px;padding:0 16px}
+.group-t{font-size:13px;color:var(--muted);margin:16px 4px 6px}
+.list{background:var(--fill);border-radius:14px;overflow:hidden}
+.li{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:12px 14px;min-height:50px;text-align:left;border-top:.5px solid var(--hair)}
+.li:first-child{border-top:0}
+.li .n{flex:1;min-width:0}
+.li .w{color:var(--muted)}
+.li .check{width:20px;color:var(--tint);font-weight:700}
+.li.edit{display:grid;grid-template-columns:minmax(0,1fr) 84px 36px;gap:8px}
+.li.edit input{border:0;background:var(--glass-strong);border-radius:10px;padding:8px 10px;min-height:40px;font-size:16px;width:100%}
+.del{border:0;background:none;color:var(--danger);font-size:20px;min-height:40px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;min-height:50px;font-size:17px;font-weight:600;background:var(--fill);color:var(--tint)}
+.btn.primary{background:var(--tint);color:#fff}
+.status{font-size:14px;color:var(--muted);margin:12px 4px 0;min-height:18px}
+.preview{background:var(--fill);border-radius:14px;padding:12px;margin-top:12px}
+.preview p{margin:0 0 10px;font-size:15px}
+
+/* Animazioni di pressione */
+@media (prefers-reduced-motion:no-preference){
+  .chip,.btn,.pill,.quick,.icon-btn,.stepper button{transition:transform .15s ease,background-color .2s}
+  .chip:active,.btn:active,.pill:active,.quick:active,.icon-btn:active,.stepper button:active{transform:scale(.96)}
+  .readout .val.bump{animation:bump .35s cubic-bezier(.2,.9,.3,1.3)}
+}
+@keyframes bump{40%{transform:scale(1.04)}}
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<div class="wrap">
+  <header>
+    <h1>Bilancia</h1>
+    <button type="button" class="icon-btn glass" id="openSettings" aria-label="Impostazioni e sincronizzazione">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+    </button>
+  </header>
+
+  <section class="card glass" aria-label="Pesata">
+    <div class="recrow">
+      <button type="button" class="pill" id="openRec">
+        <span class="t"><b id="recName">Recipiente</b><span class="num" id="recTara">Tara 0 g</span></span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+      </button>
+      <button type="button" class="quick" id="openNewTara" aria-label="Tara al volo"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px"><path d="M12 5v14M5 12h14"></path></svg>Tara</button>
+    </div>
+    <div class="field mt hidden" id="taraManualBox">
+      <label for="taraManual">Tara manuale (g)</label>
+      <input id="taraManual" class="inp num" type="number" inputmode="decimal" min="0" placeholder="0">
+    </div>
+
+    <div class="readout rounded" aria-live="polite">
+      <span class="val num" id="netto">0</span><span class="u">g</span>
+    </div>
+    <div class="sub" id="nettoSub">Netto cotto</div>
+    <div class="bar" id="bar" aria-hidden="true"></div>
+
+    <div class="field">
+      <label for="lordo">Peso lordo (g)</label>
+      <input id="lordo" class="inp big num rounded" type="number" inputmode="decimal" min="0" placeholder="Pesa la pentola piena">
+    </div>
+    <div class="warn hidden" id="warnNetto">Il lordo è minore della tara: controlla il recipiente o il peso.</div>
+  </section>
+
+  <section class="card glass" aria-label="Suddivisione">
+    <div class="seg" id="seg" data-v="pct" role="group" aria-label="Modalità di suddivisione">
+      <span class="thumb" aria-hidden="true"></span>
+      <button type="button" id="mPct" aria-pressed="true">Percentuale</button>
+      <button type="button" id="mCrudo" aria-pressed="false">Grammi a crudo</button>
+    </div>
+
+    <div class="field" id="crudoBox">
+      <label for="crudoTot" id="crudoTotLbl">Crudo totale (g), facoltativo</label>
+      <input id="crudoTot" class="inp num" type="number" inputmode="decimal" min="0" placeholder="es. 400">
+    </div>
+
+    <div class="row-between mt">
+      <span style="font-weight:600">Porzioni</span>
+      <div class="stepper" role="group" aria-label="Numero di porzioni">
+        <button type="button" id="nMinus" aria-label="Una porzione in meno">−</button><i></i>
+        <span class="num" id="nVal" aria-live="polite">2</span><i></i>
+        <button type="button" id="nPlus" aria-label="Una porzione in più">+</button>
+      </div>
+    </div>
+
+    <div class="chips" id="chips" role="group" aria-label="Divisioni rapide"></div>
+    <p class="hint hidden" id="chipsHint">Inserisci il crudo totale per usare le divisioni rapide.</p>
+
+    <div class="people" id="people"></div>
+
+    <div class="rem num">
+      <span>Rimanenza <small id="remIn"></small></span>
+      <b><span id="remOut">0</span> g</b>
+    </div>
+    <div class="warn hidden" id="warnSplit"></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- Recipienti -->
+<div class="sheet" id="sheetRec" role="dialog" aria-modal="true" aria-labelledby="recTitle">
+  <div class="grab"></div>
+  <div class="head">
+    <button type="button" class="txt-btn" id="recEdit">Modifica</button>
+    <h2 id="recTitle">Recipienti</h2>
+    <button type="button" class="txt-btn" data-close>Fine</button>
+  </div>
+  <input id="recSearch" class="inp" type="search" placeholder="Cerca" autocomplete="off" aria-label="Cerca recipiente">
+  <div class="scroll" id="recScroll">
+    <div class="list mt"><button type="button" class="li" id="pickManual"><span class="check" id="manualCheck"></span><span class="n">Tara manuale</span><span class="w">inserisci a mano</span></button></div>
+    <div id="recList"></div>
+    <div class="actions">
+      <button type="button" class="btn" id="expXlsx">Esporta Excel</button>
+      <button type="button" class="btn" id="impXlsx">Importa Excel</button>
+    </div>
+    <input type="file" id="impFile" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
+    <div class="preview hidden" id="impPreview">
+      <p id="impSummary"></p>
+      <div class="actions" style="grid-template-columns:1fr 1fr 1fr;margin-top:0">
+        <button type="button" class="btn primary" id="impReplace">Sostituisci</button>
+        <button type="button" class="btn primary" id="impMerge">Unisci</button>
+        <button type="button" class="btn" id="impCancel">Annulla</button>
+      </div>
+    </div>
+    <p class="status" id="recStatus"></p>
+  </div>
+</div>
+
+<!-- Tara al volo -->
+<div class="sheet" id="sheetNew" role="dialog" aria-modal="true" aria-labelledby="newTitle">
+  <div class="grab"></div>
+  <div class="head">
+    <button type="button" class="txt-btn" data-close>Annulla</button>
+    <h2 id="newTitle">Tara al volo</h2>
+    <button type="button" class="txt-btn" id="newSave">Salva</button>
+  </div>
+  <p class="hint" style="margin:0 4px 14px">Appoggia il recipiente vuoto sulla bilancia e scrivi il peso. Lo salvo nell'archivio e lo uso subito.</p>
+  <div class="field">
+    <label for="newTara">Peso a vuoto (g)</label>
+    <input id="newTara" class="inp big num rounded" type="number" inputmode="decimal" min="0" placeholder="0">
+  </div>
+  <div class="field mt">
+    <label for="newName">Nome</label>
+    <input id="newName" class="inp" placeholder="es. IKEA - Tupper tondo con coperchio" autocomplete="off">
+  </div>
+  <p class="status" id="newStatus"></p>
+</div>
+
+<!-- Impostazioni -->
+<div class="sheet" id="sheetSet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="grab"></div>
+  <div class="head">
+    <span style="width:52px"></span>
+    <h2 id="setTitle">Sincronizzazione</h2>
+    <button type="button" class="txt-btn" data-close>Fine</button>
+  </div>
+  <div class="scroll">
+    <p class="status" id="syncInfo" style="margin-top:0">Non collegata: l'archivio resta solo su questo dispositivo.</p>
+    <div class="field mt">
+      <label for="syncUrl">Indirizzo App web (termina con /exec)</label>
+      <input id="syncUrl" class="inp" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+    </div>
+    <div class="field mt">
+      <label for="syncKey">Chiave</label>
+      <input id="syncKey" class="inp" type="password" autocomplete="off" placeholder="La stessa scritta in Code.gs">
+    </div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="syncConnect">Collega</button>
+      <button type="button" class="btn" id="syncOff">Scollega</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const fmt = n => (isFinite(n) ? Math.round(n) : 0).toLocaleString('it-IT');
+  const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('it-IT');
+  const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : 0; };
+  const uid = () => 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const tap = () => { try { navigator.vibrate && navigator.vibrate(8); } catch(e){} };
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const MANUAL = '__manual__', MAXN = 6;
+  const COLORS = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)'];
+
+  const DEFAULT_RECIPIENTI = [
+    ['Barazzoni - Pentola', 1071], ['Generico - Pirofila vetro', 1498], ['Generico - Tupper rettangolare stondato', 54],
+    ['IKEA - Ciotola vetro', 562], ['IKEA - Padella', 688], ['IKEA - Pentola +Grande', 1016], ['IKEA - Pentola alta', 697],
+    ['IKEA - Pentola larga', 563], ['IKEA - Pentolino senza manico', 313], ['IKEA - Pentolino con manico', 411],
+    ['IKEA - Tupper quadrato', 85], ['Kasanova - Padella grande', 1049], ['Kasanova - Padella piccola', 877],
+    ['Kasanova - Pentolino', 660]
+  ].map(([nome, tara]) => ({ id: uid(), nome, tara }));
+
+  const ls = {
+    get(k, d){ try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch(e){ return d; } },
+    set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  };
+
+  let recipienti = (ls.get('bilancia-data', null) || { recipienti: DEFAULT_RECIPIENTI }).recipienti;
+  let state = ls.get('bilancia-state', {});
+  if (!state.v2){ state = { v2: true, mode: state.mode || 'pct', recName: state.recName, lordo: state.lordo, crudoTot: state.crudoTot, taraManual: state.taraManual }; }
+  state.n = Math.min(Math.max(state.n || 2, 1), MAXN);
+  state.pct = state.pct || [];
+  state.crudo = state.crudo || [];
+  let sync = ls.get('bilancia-sync', { url: '', key: '', dirty: false });
+  const saveState = () => ls.set('bilancia-state', state);
+
+  function saveData(){
+    ls.set('bilancia-data', { recipienti });
+    if (sync.url){ sync.dirty = true; ls.set('bilancia-sync', sync); schedulePush(); }
+  }
+
+  // ---------- Numeri animati ----------
+  function animateTo(el, to){
+    const from = el._v ?? 0; el._v = to;
+    if (reduce || Math.abs(to - from) < 1){ el.textContent = fmt(to); return; }
+    cancelAnimationFrame(el._raf);
+    const t0 = performance.now(), d = 450;
+    const step = t => {
+      const k = Math.min((t - t0) / d, 1), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (k < 1) el._raf = requestAnimationFrame(step);
+    };
+    el._raf = requestAnimationFrame(step);
+  }
+
+  // ---------- Fogli ----------
+  let openSheet = null;
+  function open(id){
+    if (openSheet) close();
+    openSheet = $(id); openSheet.classList.add('on'); $('scrim').classList.add('on');
+    const f = openSheet.querySelector('input:not([type=file])');
+    if (f && id !== 'sheetRec') setTimeout(() => f.focus(), 350);
+  }
+  function close(){
+    if (!openSheet) return;
+    openSheet.classList.remove('on'); $('scrim').classList.remove('on'); openSheet = null;
+    recEditing = false; $('recEdit').textContent = 'Modifica'; $('impPreview').classList.add('hidden');
+  }
+  $('scrim').addEventListener('click', close);
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && openSheet) close(); });
+
+  // ---------- Recipiente scelto ----------
+  const current = () => state.recName === MANUAL ? null : recipienti.find(r => r.nome === state.recName);
+  function currentTara(){ if (state.recName === MANUAL) return num($('taraManual').value); const r = current(); return r ? num(r.tara) : 0; }
+  function renderCurrent(){
+    if (state.recName !== MANUAL && !current()) state.recName = recipienti.length ? recipienti.slice().sort(byName)[0].nome : MANUAL;
+    const manual = state.recName === MANUAL, r = current();
+    $('recName').textContent = manual ? 'Tara manuale' : r.nome.replace(' - ', ' · ');
+    $('recTara').textContent = manual ? 'Inserisci la tara qui sotto' : 'Tara ' + fmt(r.tara) + ' g';
+    $('taraManualBox').classList.toggle('hidden', !manual);
+  }
+  const byName = (a, b) => a.nome.localeCompare(b.nome, 'it');
+
+  // ---------- Foglio recipienti ----------
+  let recEditing = false;
+  function renderRecList(){
+    const q = $('recSearch').value.trim().toLowerCase();
+    const box = $('recList'); box.innerHTML = '';
+    $('manualCheck').textContent = state.recName === MANUAL ? '✓' : '';
+    const groups = {};
+    recipienti.filter(r => !q || r.nome.toLowerCase().includes(q)).sort(byName).forEach(r => {
+      const i = r.nome.indexOf(' - '), g = i > 0 ? r.nome.slice(0, i) : 'Altro';
+      (groups[g] = groups[g] || []).push(r);
+    });
+    const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'it'));
+    if (!keys.length){ box.innerHTML = '<p class="status">' + (q ? 'Nessun recipiente trovato.' : 'Archivio vuoto: usa "Tara al volo" per aggiungere il primo.') + '</p>'; return; }
+    keys.forEach(g => {
+      const t = document.createElement('div'); t.className = 'group-t'; t.textContent = g; box.appendChild(t);
+      const list = document.createElement('div'); list.className = 'list';
+      groups[g].forEach(r => {
+        const i = r.nome.indexOf(' - '), short = i > 0 ? r.nome.slice(i + 3) : r.nome;
+        if (!recEditing){
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'li';
+          b.innerHTML = '<span class="check"></span><span class="n"></span><span class="w num"></span>';
+          b.children[0].textContent = r.nome === state.recName ? '✓' : '';
+          b.children[1].textContent = short; b.children[2].textContent = fmt(r.tara) + ' g';
+          b.addEventListener('click', () => { tap(); state.recName = r.nome; saveState(); renderCurrent(); compute(); close(); });
+          list.appendChild(b);
+        } else {
+          const row = document.createElement('div'); row.className = 'li edit';
+          const n = document.createElement('input'); n.value = r.nome; n.setAttribute('aria-label', 'Nome recipiente');
+          const w = document.createElement('input'); w.type = 'number'; w.inputMode = 'decimal'; w.className = 'num'; w.value = r.tara; w.setAttribute('aria-label', 'Tara in grammi');
+          const d = document.createElement('button'); d.type = 'button'; d.className = 'del'; d.textContent = '⊖'; d.setAttribute('aria-label', 'Elimina ' + r.nome);
+          const save = () => {
+            const nome = n.value.trim(), tara = num(w.value);
+            if (!nome || recipienti.some(x => x !== r && x.nome.toLowerCase() === nome.toLowerCase())){ n.value = r.nome; return; }
+            if (nome === r.nome && tara === r.tara) return;
+            if (state.recName === r.nome) state.recName = nome;
+            r.nome = nome; r.tara = tara; saveData(); saveState(); renderCurrent(); compute(); recStatus('Salvato.');
+          };
+          n.addEventListener('change', save); w.addEventListener('change', save);
+          d.addEventListener('click', () => {
+            if (!confirm('Eliminare "' + r.nome + '"?')) return;
+            recipienti = recipienti.filter(x => x !== r); saveData(); renderCurrent(); compute(); renderRecList(); recStatus('Eliminato.');
+          });
+          row.append(n, w, d); list.appendChild(row);
+        }
+      });
+      box.appendChild(list);
+    });
+  }
+  const recStatus = t => { $('recStatus').textContent = t; };
+  $('openRec').addEventListener('click', () => { tap(); $('recSearch').value = ''; recStatus(''); renderRecList(); open('sheetRec'); });
+  $('recSearch').addEventListener('input', renderRecList);
+  $('recEdit').addEventListener('click', () => { recEditing = !recEditing; $('recEdit').textContent = recEditing ? 'Fatto' : 'Modifica'; renderRecList(); });
+  $('pickManual').addEventListener('click', () => { tap(); state.recName = MANUAL; saveState(); renderCurrent(); compute(); close(); setTimeout(() => $('taraManual').focus(), 400); });
+
+  // ---------- Tara al volo ----------
+  $('openNewTara').addEventListener('click', () => {
+    tap(); $('newTara').value = state.recName === MANUAL ? $('taraManual').value : ''; $('newName').value = ''; $('newStatus').textContent = ''; open('sheetNew');
+  });
+  $('newSave').addEventListener('click', () => {
+    const tara = num($('newTara').value);
+    let nome = $('newName').value.trim();
+    if (!tara){ $('newStatus').textContent = 'Scrivi il peso a vuoto del recipiente.'; return; }
+    if (!nome){ let k = 1; do { nome = 'Recipiente ' + k++; } while (recipienti.some(r => r.nome === nome)); }
+    const ex = recipienti.find(r => r.nome.toLowerCase() === nome.toLowerCase());
+    if (ex) ex.tara = tara; else recipienti.push({ id: uid(), nome, tara });
+    state.recName = ex ? ex.nome : nome; saveData(); saveState(); tap();
+    renderCurrent(); compute(); close();
+  });
+
+  // ---------- Porzioni ----------
+  function presets(n){
+    const eq = k => { const a = Array(k).fill(Math.floor(1000 / k) / 10); a[k - 1] = Math.round((100 - a[0] * (k - 1)) * 10) / 10; return a; };
+    const list = [{ label: 'Uguali', v: eq(n) }];
+    if (n < MAXN) list.push({ label: 'Uguali + avanzo', v: eq(n + 1).slice(0, n).map(x => Math.floor(1000 / (n + 1)) / 10) });
+    const extra = {
+      1: [[75], [50]],
+      2: [[60, 40], [40, 60], [70, 30], [30, 70], [66.7, 33.3], [33.3, 66.7]],
+      3: [[50, 25, 25], [40, 30, 30], [25, 25, 50]],
+      4: [[40, 20, 20, 20], [30, 30, 20, 20]],
+      5: [[40, 15, 15, 15, 15]],
+      6: []
+    }[n];
+    extra.forEach(v => list.push({ label: v.map(fmt1).join(' / '), v }));
+    if (n === 1) list.splice(0, 2, { label: 'Tutto', v: [100] });
+    return list;
+  }
+  function renderChips(){
+    const box = $('chips'); box.innerHTML = '';
+    const ct = num($('crudoTot').value);
+    const disabled = state.mode === 'crudo' && !ct;
+    box.classList.toggle('hidden', disabled); $('chipsHint').classList.toggle('hidden', !disabled);
+    if (disabled) return;
+    presets(state.n).forEach(p => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip num'; b.textContent = p.label;
+      const cur = state.mode === 'pct' ? state.pct.slice(0, state.n).map(num) : state.crudo.slice(0, state.n).map(x => num(x) / ct * 100);
+      if (cur.length === p.v.length && p.v.every((x, i) => Math.abs(x - cur[i]) < 0.6)) b.classList.add('on');
+      b.addEventListener('click', () => {
+        tap();
+        if (state.mode === 'pct') state.pct = p.v.map(x => String(x));
+        else state.crudo = p.v.map(x => String(Math.round(x / 100 * ct)));
+        saveState(); renderPeople(); compute();
+      });
+      box.appendChild(b);
+    });
+  }
+  function renderPeople(addedIndex){
+    const box = $('people'); box.innerHTML = '';
+    const arr = state.mode === 'pct' ? state.pct : state.crudo;
+    for (let i = 0; i < state.n; i++){
+      const row = document.createElement('div'); row.className = 'person' + (i === addedIndex ? ' new' : '');
+      const badge = document.createElement('span'); badge.className = 'badge'; badge.style.background = COLORS[i]; badge.textContent = i + 1; badge.setAttribute('aria-hidden', 'true');
+      const v = document.createElement('input'); v.type = 'number'; v.inputMode = 'decimal'; v.min = '0'; v.className = 'inp num inval';
+      v.value = arr[i] ?? ''; v.placeholder = state.mode === 'pct' ? 'Quota' : 'Crudo';
+      v.setAttribute('aria-label', (state.mode === 'pct' ? 'Percentuale porzione ' : 'Grammi a crudo porzione ') + (i + 1));
+      v.addEventListener('input', () => { arr[i] = v.value; saveState(); compute(); renderChipsState(); });
+      const out = document.createElement('div'); out.className = 'out num';
+      out.innerHTML = '<b class="rounded"><span class="o1">0</span> g</b><span class="o2"></span>';
+      const uw = document.createElement('div'); uw.className = 'unitwrap';
+      const em = document.createElement('em'); em.textContent = state.mode === 'pct' ? '%' : 'g';
+      uw.append(v, em);
+      row.append(badge, uw, out); box.appendChild(row);
+    }
+    $('nVal').textContent = state.n;
+    $('nMinus').disabled = state.n <= 1; $('nPlus').disabled = state.n >= MAXN;
+    renderChips(); renderBar();
+  }
+  const renderChipsState = () => renderChips();
+  function renderBar(){
+    const bar = $('bar');
+    while (bar.children.length < MAXN + 1) bar.appendChild(document.createElement('i'));
+    [...bar.children].forEach((el, i) => { el.style.background = i < MAXN ? COLORS[i] : 'transparent'; });
+  }
+  $('nPlus').addEventListener('click', () => { if (state.n >= MAXN) return; tap(); state.n++; saveState(); renderPeople(state.n - 1); compute(); });
+  $('nMinus').addEventListener('click', () => { if (state.n <= 1) return; tap(); state.n--; saveState(); renderPeople(); compute(); });
+
+  // ---------- Modalità ----------
+  function setMode(m){
+    state.mode = m; saveState();
+    $('seg').dataset.v = m;
+    $('mPct').setAttribute('aria-pressed', m === 'pct'); $('mCrudo').setAttribute('aria-pressed', m === 'crudo');
+    $('crudoTotLbl').textContent = m === 'pct' ? 'Crudo totale (g), facoltativo' : 'Crudo totale (g)';
+    renderPeople(); compute();
+  }
+  $('mPct').addEventListener('click', () => { tap(); setMode('pct'); });
+  $('mCrudo').addEventListener('click', () => { tap(); setMode('crudo'); });
+
+  // ---------- Calcolo ----------
+  let lastNetto = null;
+  function compute(){
+    const tara = currentTara(), lordo = num($('lordo').value);
+    const netto = lordo > 0 ? lordo - tara : 0, N = Math.max(netto, 0);
+    const nEl = $('netto'); animateTo(nEl, N);
+    if (lastNetto !== null && Math.round(N) !== Math.round(lastNetto) && !reduce){ nEl.classList.remove('bump'); void nEl.offsetWidth; nEl.classList.add('bump'); }
+    lastNetto = N;
+    $('warnNetto').classList.toggle('hidden', !(lordo > 0 && netto < 0));
+    $('nettoSub').textContent = lordo > 0 ? 'Netto cotto · tara ' + fmt(tara) + ' g' : 'Netto cotto';
+    const ct = num($('crudoTot').value);
+    const rows = [...document.querySelectorAll('.person')];
+    const fr = []; let w = '', remF = 0, remSub = '';
+
+    if (state.mode === 'pct'){
+      let sum = 0;
+      rows.forEach((row, i) => {
+        const p = num(state.pct[i]) / 100; sum += p; fr.push(p);
+        animateTo(row.querySelector('.o1'), N * p);
+        row.querySelector('.o2').textContent = ct && p ? '≈ ' + fmt(ct * p) + ' g crudo' : '';
+      });
+      remF = Math.max(1 - sum, 0);
+      remSub = fmt1(remF * 100) + '%' + (ct ? ' · ≈ ' + fmt(ct * remF) + ' g crudo' : '');
+      if (sum > 1.0001) w = 'Le quote superano il 100% (' + fmt1(sum * 100) + '%).';
+    } else {
+      let sum = 0; rows.forEach((r, i) => { sum += num(state.crudo[i]); });
+      const base = ct > 0 ? ct : sum;
+      rows.forEach((row, i) => {
+        const g = num(state.crudo[i]), f = base ? g / base : 0; fr.push(f);
+        animateTo(row.querySelector('.o1'), f * N);
+        row.querySelector('.o2').textContent = f ? fmt1(f * 100) + '%' : '';
+      });
+      const remC = ct > 0 ? Math.max(ct - sum, 0) : 0;
+      remF = base ? remC / base : 0;
+      remSub = ct > 0 ? fmt(remC) + ' g crudo' : '';
+      if (ct > 0 && sum > ct) w = 'Hai assegnato ' + fmt(sum) + ' g a crudo, più dei ' + fmt(ct) + ' g totali.';
+      else if (!ct && sum) w = 'Senza il crudo totale divido tutto il cotto tra le porzioni.';
+    }
+    animateTo($('remOut'), N * remF);
+    $('remIn').textContent = remSub;
+    // barra
+    const total = fr.reduce((a, b) => a + b, 0), scale = total > 1 ? 1 / total : 1;
+    const segs = [...$('bar').children];
+    segs.forEach((el, i) => { el.style.width = (i < fr.length ? fr[i] * scale * 100 : 0) + '%'; });
+    $('warnSplit').textContent = w; $('warnSplit').classList.toggle('hidden', !w);
+    state.lordo = $('lordo').value; state.crudoTot = $('crudoTot').value; state.taraManual = $('taraManual').value;
+    saveState();
+  }
+  $('lordo').addEventListener('input', compute);
+  $('taraManual').addEventListener('input', compute);
+  $('crudoTot').addEventListener('input', () => { compute(); renderChips(); });
+
+  // ---------- Excel ----------
+  let pending = null;
+  const xlsxReady = () => { if (window.XLSX) return true; recStatus('Libreria Excel non ancora caricata: riprova tra un attimo.'); return false; };
+  $('expXlsx').addEventListener('click', async () => {
+    if (!xlsxReady()) return;
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([['Nome', 'Tara (g)']].concat(recipienti.slice().sort(byName).map(r => [r.nome, r.tara])));
+    ws['!cols'] = [{ wch: 42 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Recipienti');
+    const name = 'bilancia-recipienti-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    try {
+      if (isIOS && navigator.canShare){
+        const file = new File([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        if (navigator.canShare({ files: [file] })){ await navigator.share({ files: [file] }); recStatus('Esportato.'); return; }
+      }
+      XLSX.writeFile(wb, name); recStatus('Esportato: ' + name);
+    } catch(e){ if (e && e.name !== 'AbortError') recStatus('Esportazione non riuscita.'); }
+  });
+  $('impXlsx').addEventListener('click', () => { if (xlsxReady()) $('impFile').click(); });
+  $('impFile').addEventListener('change', async () => {
+    const f = $('impFile').files[0]; $('impFile').value = '';
+    if (!f) return;
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+      const sn = wb.SheetNames.find(n => /^recipienti$/i.test(n)) || wb.SheetNames.find(n => /^input$/i.test(n)) || wb.SheetNames[0];
+      const rec = [];
+      XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, blankrows: false }).forEach(r => {
+        const nome = String(r[0] ?? '').trim(), tara = typeof r[1] === 'number' ? r[1] : parseFloat(String(r[1] ?? '').replace(',', '.'));
+        if (nome && isFinite(tara) && tara > 0 && !rec.some(x => x.nome.toLowerCase() === nome.toLowerCase())) rec.push({ nome, tara: Math.round(tara * 10) / 10 });
+      });
+      if (!rec.length){ recStatus('Nel file non ho trovato recipienti: servono il nome nella colonna A e la tara in grammi nella colonna B.'); return; }
+      pending = rec;
+      $('impSummary').textContent = 'Trovati ' + rec.length + ' recipienti nel foglio "' + sn + '". Sostituisci cancella l\'archivio attuale; Unisci aggiunge i nuovi e aggiorna la tara di quelli con lo stesso nome.';
+      $('impPreview').classList.remove('hidden');
+    } catch(e){ recStatus('Non riesco a leggere il file. Usa un file .xlsx o .csv.'); }
+  });
+  function applyImport(mode){
+    if (!pending) return;
+    let added = 0, updated = 0;
+    if (mode === 'replace'){ recipienti = pending.map(r => ({ id: uid(), nome: r.nome, tara: r.tara })); added = recipienti.length; }
+    else pending.forEach(r => {
+      const ex = recipienti.find(x => x.nome.toLowerCase() === r.nome.toLowerCase());
+      if (ex){ if (ex.tara !== r.tara){ ex.tara = r.tara; updated++; } } else { recipienti.push({ id: uid(), nome: r.nome, tara: r.tara }); added++; }
+    });
+    pending = null; $('impPreview').classList.add('hidden');
+    saveData(); renderCurrent(); compute(); renderRecList();
+    recStatus(mode === 'replace' ? 'Archivio sostituito: ' + added + ' recipienti.' : 'Importati ' + added + ' nuovi recipienti, ' + updated + ' tare aggiornate.');
+  }
+  $('impReplace').addEventListener('click', () => { if (confirm('Sostituire tutto l\'archivio con il file importato?')) applyImport('replace'); });
+  $('impMerge').addEventListener('click', () => applyImport('merge'));
+  $('impCancel').addEventListener('click', () => { pending = null; $('impPreview').classList.add('hidden'); });
+
+  // ---------- Sincronizzazione (Google Sheet) ----------
+  let pushTimer = null, busy = false;
+  const info = t => { $('syncInfo').textContent = t; };
+  const hhmm = () => new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  async function pull(){
+    const r = await fetch(sync.url + '?key=' + encodeURIComponent(sync.key), { cache: 'no-store' });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'Errore'); return j;
+  }
+  async function push(){
+    const body = JSON.stringify({ key: sync.key, recipienti: recipienti.map(r => ({ nome: r.nome, tara: r.tara })), persone: [] });
+    const r = await fetch(sync.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error || 'Errore');
+    sync.dirty = false; ls.set('bilancia-sync', sync);
+  }
+  function schedulePush(){
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      if (busy) return schedulePush();
+      busy = true;
+      try { await push(); info('Sincronizzata alle ' + hhmm() + '.'); } catch(e){ info('Modifiche salvate sul dispositivo. Le invio appena torna la connessione.'); }
+      busy = false;
+    }, 800);
+  }
+  async function refresh(first){
+    if (!sync.url || busy) return;
+    busy = true;
+    try {
+      if (sync.dirty) await push();
+      const remote = await pull();
+      if (first && !remote.recipienti.length){ await push(); info('Collegata: ho copiato il tuo archivio nel foglio Google.'); }
+      else {
+        recipienti = remote.recipienti.map(r => ({ id: uid(), nome: r.nome, tara: num(r.tara) }));
+        ls.set('bilancia-data', { recipienti }); renderCurrent(); compute();
+        if (openSheet && openSheet.id === 'sheetRec' && !recEditing) renderRecList();
+        info('Sincronizzata alle ' + hhmm() + '.');
+      }
+    } catch(e){
+      info(e.message === 'Chiave errata' ? 'Chiave errata: deve essere uguale a quella in Code.gs.' : 'Sincronizzazione non riuscita. Controlla l\'indirizzo e la connessione; i dati restano sul dispositivo.');
+    }
+    busy = false;
+  }
+  $('openSettings').addEventListener('click', () => { tap(); $('syncUrl').value = sync.url; $('syncKey').value = sync.key; open('sheetSet'); });
+  $('syncConnect').addEventListener('click', () => {
+    const url = $('syncUrl').value.trim(), key = $('syncKey').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)){ info('L\'indirizzo deve iniziare con https://script.google.com e finire con /exec.'); return; }
+    if (!key){ info('Inserisci la chiave.'); return; }
+    sync = { url, key, dirty: false }; ls.set('bilancia-sync', sync); info('Collegamento in corso…'); refresh(true);
+  });
+  $('syncOff').addEventListener('click', () => {
+    sync = { url: '', key: '', dirty: false }; ls.set('bilancia-sync', sync);
+    $('syncUrl').value = ''; $('syncKey').value = ''; info('Non collegata: l\'archivio resta solo su questo dispositivo.');
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(false); });
+
+  // ---------- Avvio ----------
+  $('lordo').value = state.lordo || ''; $('crudoTot').value = state.crudoTot || ''; $('taraManual').value = state.taraManual || '';
+  ls.set('bilancia-data', { recipienti });
+  renderCurrent(); setMode(state.mode);
+  if (sync.url) info('Collegata.');
+  refresh(false);
+  if ('serviceWorker' in navigator && location.protocol === 'https:') window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+})();
+</script>
+</body>
+</html>
